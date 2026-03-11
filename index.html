@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dive.io - Multiplayer Cave Diving Game</title>
+    <script src="node_modules/phaser/dist/phaser.min.js"></script>
+    <script src="/socket.io/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a2e 0%, #16213e 100%);
+            color: white;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+
+        #game-container {
+            position: relative;
+            background: #0a0a0a;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0, 255, 0, 0.3);
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            border: 2px solid #00ff00;
+            z-index: 100;
+            max-width: 200px;
+        }
+
+        #info h2 {
+            color: #ffff00;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        #info div {
+            margin: 5px 0;
+            color: #00ff00;
+        }
+
+        .control {
+            font-size: 12px;
+            color: #aaaaaa;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="info">
+            <h2>🎮 Dive.io</h2>
+            <div><strong>WASD:</strong> <span class="control">Move</span></div>
+            <div><strong>Objective:</strong> <span class="control">Eat food & grow</span></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong>Strategy:</strong> <span class="control">Avoid larger divers</span>
+                <button id="toggleInfo" style="background:none;border:none;color:#ffff00;font-size:16px;cursor:pointer;">❯</button>
+            </div>
+            <div style="margin-top:10px">
+                <button id="newRoomBtn" style="padding:4px 8px;font-size:12px;">Create New Room</button>
+            </div>
+            <div id="shareLink" style="margin-top:10px;word-break:break-all;font-size:12px;"></div>
+            <div id="manualJoin" style="margin-top:10px;font-size:12px;">
+                <input id="nameInput" placeholder="Name (opt)" maxlength="6" style="width:80px;padding:2px;margin-right:4px;">
+                <input id="roomInput" placeholder="Room code" maxlength="6" style="width:80px;padding:2px;margin-right:4px;">
+                <button id="joinBtn" style="padding:2px 6px;font-size:12px;">Join</button>
+                <div id="shortLink" style="margin-top:4px;word-break:break-all;font-size:11px;color:#00ff00;"></div>
+            </div>
+        </div>
+    </div>
+    <script src="src/game.js"></script>
+    <script>
+        // utility to read query params
+        function getQueryParams() {
+            const params = {};
+            window.location.search.substring(1).split('&').forEach(pair => {
+                if (!pair) return;
+                const [key, value] = pair.split('=');
+                params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+            });
+            return params;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+                const params = getQueryParams();
+            const room = params.room || 'lobby';
+            const shareDiv = document.getElementById('shareLink');
+            const fullLink = `${window.location.origin}${window.location.pathname}?room=${room}`;
+            const shortLink = `${window.location.origin}/r/${room}`;
+            shareDiv.innerHTML = `Share this link: <a href="${fullLink}" target="_blank">${fullLink}</a><br>Short: <a href="${shortLink}" target="_blank">${shortLink}</a>`;
+            // prefill manual inputs
+            const nameInput = document.getElementById('nameInput');
+            const roomInput = document.getElementById('roomInput');
+            if (roomInput) roomInput.value = room;
+            if (nameInput && params.name) nameInput.value = params.name;
+
+            const newBtn = document.getElementById('newRoomBtn');
+            newBtn.addEventListener('click', () => {
+                // navigate to server endpoint that creates a new random room
+                window.location.href = '/new';
+            });
+
+            // short link display under manual join
+            const shortDisplay = document.getElementById('shortLink');
+            if (shortDisplay) {
+                shortDisplay.textContent = `Short room URL: ${shortLink}`;
+            }
+
+            // join button functionality
+            const joinBtn = document.getElementById('joinBtn');
+            if (joinBtn) {
+                joinBtn.addEventListener('click', () => {
+                    const name = document.getElementById('nameInput').value || '';
+                    const roomId = document.getElementById('roomInput').value || room;
+                    let url = `${window.location.origin}${window.location.pathname}?room=${encodeURIComponent(roomId)}`;
+                    if (name) url += `&name=${encodeURIComponent(name.substring(0,6))}`;
+                    window.location.href = url;
+                });
+            }
+
+            // toggle info pane collapse
+            const toggleBtn = document.getElementById('toggleInfo');
+            const infoDiv = document.getElementById('info');
+            let collapsed = false;
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', () => {
+                    collapsed = !collapsed;
+                    if (collapsed) {
+                        infoDiv.style.width = '30px';
+                        infoDiv.style.height = '30px';
+                        infoDiv.style.overflow = 'hidden';
+                        infoDiv.querySelectorAll('div, h2, input, button, a').forEach(el=>{if(el.id!=='toggleInfo')el.style.display='none';});
+                        toggleBtn.textContent = '❮';
+                    } else {
+                        infoDiv.style.width = '';
+                        infoDiv.style.height = '';
+                        infoDiv.querySelectorAll('div, h2, input, button, a').forEach(el=>el.style.display='');
+                        toggleBtn.textContent = '❯';
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
